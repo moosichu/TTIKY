@@ -41,6 +41,22 @@ const Period = enum {
     past,
     present,
     future,
+
+    pub fn back(period: Period) Period {
+        return switch (period) {
+            .present => .past,
+            .future => .present,
+            else => unreachable,
+        };
+    }
+
+    pub fn forward(period: Period) Period {
+        return switch (period) {
+            .past => .present,
+            .present => .future,
+            else => unreachable,
+        };
+    }
 };
 
 const Player = u1;
@@ -52,6 +68,7 @@ const board_size = 4;
 const GameState = struct {
     player_turn: Player,
     focus: [player_count]Period,
+    // Stored in order of active, reserve, dead - lets us break early out of loops
     piece_states: [player_count][piece_count]PieceState,
 
     fn construct() GameState {
@@ -95,9 +112,27 @@ const GameState = struct {
 
     fn countDeadPieces(game_state: GameState, player: Player) i32 {
         var count: i32 = 0;
-        for (game_state.piece_states[player]) |piece_state| {
-            if (piece_state == .dead) {
+
+        var piece_index = game_state.piece_states[player].len - 1;
+        while (piece_index >= 0) {
+            if (game_state.piece_states[player][piece_index] == .dead) {
                 count += 1;
+            } else {
+                break;
+            }
+            piece_index += 1;
+        }
+
+        return count;
+    }
+
+    fn countReservePieces(game_state: GameState, player: Player) i32 {
+        var count: i32 = 0;
+        for (game_state.piece_states[player]) |piece_state| {
+            if (piece_state == .reserve) {
+                count += 1;
+            } else if (piece_state == .dead) {
+                break;
             }
         }
         return count;
@@ -152,6 +187,8 @@ const GameState = struct {
         for (game_state.piece_states[other_player]) |piece_state| {
             if (piece_state == .active) {
                 active_count += 1;
+            } else {
+                break;
             }
         }
         if (active_count < 2) {
@@ -171,6 +208,8 @@ const GameState = struct {
                 if (piece_position.equals(other_piece_position)) {
                     return true;
                 }
+            } else {
+                break;
             }
         }
         return false;
@@ -181,16 +220,30 @@ const GameState = struct {
         const focus = game_state.focus[player];
         var move: Move = undefined;
         // check you can do two moves!
+        var reserve_count = game_state.countReservePieces(player);
         for (game_state.piece_states[player]) |piece_state| {
+            if (piece_state != .active) {
+                break;
+            }
+
             if (piece_state.period == focus) {
                 if (piece_state.space[0] < board_size - 1) {
-                    move.actions[0] = piece_state.space[0] + PieceSpace{ 1, 0 };
+                    move.actions[0] = piece_state.space + PieceSpace{ 1, 0 };
                     // can't move into space occupied by ourselves!
-                    if (!game_state.isOccupiedByPlayer(.{ .period = focus, .space = move.actions[0] }, player)) {
+                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.period, .space = move.actions[0] }, player)) {
                         // can move back and forth - so cam defo do a full move
                         return true;
                     }
                 }
+
+                // can travel back to past!
+                if (piece_state.period != .future and reserve_count > 0) {
+                    move.actions[0] = piece_state.period.back();
+                    if (!game_state.isOccupiedByPlayer(.{ .period = move.actions[0], .space = piece_state.space }, player)) {
+                        // TODO: check further moves!
+                    }
+                }
+                // check moving to the future!
             }
         }
         // TODO: check time travel!
@@ -229,7 +282,7 @@ fn makeGoodMove(game_state: *GameState) void {
             // check for collision with own pieces!
             // can move this piece!
             if (piece_state.space[0] < board_size - 1) {
-                move.actions[0] = piece_state.space[0] + PieceSpace{ 1, 0 };
+                move.actions[0] = piece_state.space + PieceSpace{ 1, 0 };
                 break;
             }
         }
@@ -250,6 +303,7 @@ test "run random game" {
     while (true) {
         makeGoodMove(game_state);
         const winner = game_state.getWinner();
+        _ = game_state.hasMovablePiece();
         if (winner.hasWinner()) {
             // WOHOO
             break;
