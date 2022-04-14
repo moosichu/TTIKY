@@ -215,10 +215,44 @@ const GameState = struct {
         return false;
     }
 
+    fn doSingleAction(game_state: GameState, piece_index: i32, move_action: MoveAction) GameState {
+        // TODO: Asser tinvariants!
+        const player = game_state.player_turn;
+        const other_player = otherPlayer(player);
+
+        // Copy game state by value
+        var next_game_state = game_state;
+        // TODO: Assert focus matches piece we are looking at!
+
+        const piece_state = game_state.piece_states[player][piece_index];
+
+        switch (move_action) {
+            .time_travel => |time_travel_action| switch (time_travel_action) {
+                .forward => {
+                    // TODO: Assert we can travel here!
+                    next_game_state.piece_states[player][piece_index].period = piece_state.period.forward();
+                },
+                .back => {
+                    // Grab first piece in reserve!
+                    // TODO: skip to current piece state index?
+                    for (next_game_state.piece_states[player]) |target_piece_state| {
+                        // TODO: This!
+                    }
+                },
+            },
+            .space_travel => |space_travel_action| {
+                // TODO: asert that we can travel to this space?
+            },
+        }
+    }
+
+    fn canDoSingleAction(game_state: GameState) bool {
+        return true;
+    }
+
     pub fn hasMovablePiece(game_state: GameState) bool {
         const player = game_state.player_turn;
         const focus = game_state.focus[player];
-        var move: Move = undefined;
         // check you can do two moves!
         var reserve_count = game_state.countReservePieces(player);
         for (game_state.piece_states[player]) |piece_state| {
@@ -228,18 +262,16 @@ const GameState = struct {
 
             if (piece_state.period == focus) {
                 if (piece_state.space[0] < board_size - 1) {
-                    move.actions[0] = piece_state.space + PieceSpace{ 1, 0 };
                     // can't move into space occupied by ourselves!
-                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.period, .space = move.actions[0] }, player)) {
+                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.period, .space = piece_state.space + PieceSpace{ 1, 0 } }, player)) {
                         // can move back and forth - so cam defo do a full move
                         return true;
                     }
                 }
 
                 // can travel back to past!
-                if (piece_state.period != .future and reserve_count > 0) {
-                    move.actions[0] = piece_state.period.back();
-                    if (!game_state.isOccupiedByPlayer(.{ .period = move.actions[0], .space = piece_state.space }, player)) {
+                if (piece_state.period != .past and reserve_count > 0) {
+                    if (!game_state.isOccupiedByPlayer(.{ .period = move.actions[0], .space = piece_state.period.back() }, player)) {
                         // TODO: check further moves!
                     }
                 }
@@ -256,9 +288,14 @@ export fn construct() void {
     _ = game_state.evaluate();
 }
 
+const TimeTravel = enum {
+    forward,
+    back,
+};
+
 const MoveAction = union(enum) {
     // Period Travelling To
-    time_travel: Period,
+    time_travel: TimeTravel,
     // Space Travelling To
     space_travel: PieceSpace,
 };
