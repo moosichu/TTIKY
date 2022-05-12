@@ -1,5 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
+const assert = std.debug.assert;
 
 // Past, present, future
 // White, Black Travellers
@@ -233,15 +234,28 @@ const GameState = struct {
                     next_game_state.piece_states[player][piece_index].period = piece_state.period.forward();
                 },
                 .back => {
-                    // Grab first piece in reserve!
-                    // TODO: skip to current piece state index?
-                    for (next_game_state.piece_states[player]) |target_piece_state| {
-                        // TODO: This!
+                    // TODO: assert that we can travel to this space!
+                    var success = false;
+                    for (next_game_state.piece_states[player]) |target_piece_state, clone_piece_index| {
+                        if (target_piece_state == .reserve) {
+                            // leave a clone in the last position occupied by the piece
+                            next_game_state.piece_states[player][clone_piece_index] = game_state.piece_states[player][piece_index];
+
+                            // travel back in time
+                            next_game_state.piece_states[player][piece_index] = .{
+                                .active = .{ .period = game_state.piece_states[player][piece_index].period.back(), .space = game_state.piece_states[player][piece_index].space },
+                            };
+
+                            success = true;
+
+                            break;
+                        }
                     }
+                    assert(success);
                 },
             },
             .space_travel => |space_travel_action| {
-                // TODO: asert that we can travel to this space?
+                // TODO: assert that we can travel to this space?
             },
         }
     }
