@@ -205,8 +205,8 @@ const GameState = struct {
 
     pub fn isOccupiedByPlayer(game_state: GameState, piece_position: PiecePosition, player: Player) bool {
         for (game_state.piece_states[player]) |piece| {
-            if (piece.active) |other_piece_position| {
-                if (piece_position.equals(other_piece_position)) {
+            if (piece == .active) {
+                if (piece_position.equals(piece.active)) {
                     return true;
                 }
             } else {
@@ -216,10 +216,10 @@ const GameState = struct {
         return false;
     }
 
-    fn doSingleAction(game_state: GameState, piece_index: i32, move_action: MoveAction) GameState {
+    fn doSingleAction(game_state: GameState, piece_index: u32, move_action: MoveAction) GameState {
         // TODO: Asser tinvariants!
         const player = game_state.player_turn;
-        const other_player = otherPlayer(player);
+        // const other_player = otherPlayer(player);
 
         // Copy game state by value
         var next_game_state = game_state;
@@ -254,13 +254,16 @@ const GameState = struct {
                     assert(success);
                 },
             },
-            .space_travel => |space_travel_action| {
+            .space_travel => |travel_amount| {
                 // TODO: assert that we can travel to this space?
+                next_game_state.piece_states[player][piece_index].active.space += travel_amount;
             },
         }
     }
 
     fn canDoSingleAction(game_state: GameState) bool {
+        _ = game_state;
+        // TODO:Next implement this!
         return true;
     }
 
@@ -274,6 +277,7 @@ const GameState = struct {
                 break;
             }
 
+            // TODO:Next this all appears to be nonsense? Implement this properly.
             if (piece_state.period == focus) {
                 if (piece_state.space[0] < board_size - 1) {
                     // can't move into space occupied by ourselves!
@@ -285,7 +289,7 @@ const GameState = struct {
 
                 // can travel back to past!
                 if (piece_state.period != .past and reserve_count > 0) {
-                    if (!game_state.isOccupiedByPlayer(.{ .period = move.actions[0], .space = piece_state.period.back() }, player)) {
+                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.period.back(), .space = piece_state.space }, player)) {
                         // TODO: check further moves!
                     }
                 }
@@ -307,11 +311,13 @@ const TimeTravel = enum {
     back,
 };
 
+const SpaceTravel = @Vector(2, i2);
+
 const MoveAction = union(enum) {
     // Period Travelling To
     time_travel: TimeTravel,
     // Space Travelling To
-    space_travel: PieceSpace,
+    space_travel: SpaceTravel,
 };
 
 const Move = struct {
@@ -327,37 +333,44 @@ fn makeGoodMove(game_state: *GameState) void {
     const focus = game_state.focus[player];
     var move: Move = undefined;
     for (game_state.piece_states[player]) |piece_state, piece_index| {
-        if (piece_state.period == focus) {
-            move.piece_index = piece_index;
+        if (piece_state == .active) {
+            if (piece_state.active.period == focus) {
+                move.piece_index = @intCast(i32, piece_index);
 
-            // check for collision with own pieces!
-            // can move this piece!
-            if (piece_state.space[0] < board_size - 1) {
-                move.actions[0] = piece_state.space + PieceSpace{ 1, 0 };
-                break;
+                // check for collision with own pieces!
+                // can move this piece!
+                if (piece_state.active.space[0] < board_size - 1) {
+                    move.actions[0].space_travel = SpaceTravel{ 1, 0 };
+                    break;
+                }
             }
         }
     }
 
     // TODO: pick a good focus!
-    focus = switch (focus) {
+    const new_focus : Period = switch (focus) {
         .past => .present,
         .present => .future,
         .future => .past,
     };
 
-    _ = focus;
+    _ = new_focus;
 }
 
-test "run random game" {
-    var game_state = GameState.construct();
-    while (true) {
-        makeGoodMove(game_state);
-        const winner = game_state.getWinner();
-        _ = game_state.hasMovablePiece();
-        if (winner.hasWinner()) {
-            // WOHOO
-            break;
-        }
-    }
+test {
+    _ = std.testing.refAllDecls(@This());
+    _ = std.testing.refAllDecls(GameState);
 }
+
+// test "run random game" {
+//     var game_state = GameState.construct();
+//     while (true) {
+//         makeGoodMove(game_state);
+//         const winner = game_state.getWinner();
+//         _ = game_state.hasMovablePiece();
+//         if (winner.hasWinner()) {
+//             // WOHOO
+//             break;
+//         }
+//     }
+// }
