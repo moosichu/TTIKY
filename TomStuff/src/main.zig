@@ -24,11 +24,16 @@ const PiecePosition = struct {
 
     pub fn equals(a: PiecePosition, b: PiecePosition) bool {
         if (a.period == b.period) {
-            if (a.space[0] == b.space[0] and a.space[1] == b.space[1] ) {
+            if (a.space[0] == b.space[0] and a.space[1] == b.space[1]) {
                 return true;
             }
         }
         return false;
+    }
+
+    pub fn moveBy(piece_position: *PiecePosition, space_travel: SpaceTravel) void {
+        // TODO: Add proper assertions about valid moves
+        piece_position.space = @intCast(@Vector(2, u2), @as(@Vector(2, i3), piece_position.space) + @as(@Vector(2, i3), space_travel));
     }
 };
 
@@ -217,9 +222,9 @@ const GameState = struct {
     }
 
     fn doSingleAction(game_state: GameState, piece_index: u32, move_action: MoveAction) GameState {
-        // TODO: Asser tinvariants!
+        // TODO: Assert tinvariants!
         const player = game_state.player_turn;
-        // const other_player = otherPlayer(player);
+        const other_player = otherPlayer(player);
 
         // Copy game state by value
         var next_game_state = game_state;
@@ -256,9 +261,17 @@ const GameState = struct {
             },
             .space_travel => |travel_amount| {
                 // TODO: assert that we can travel to this space?
-                var next_space = next_game_state.piece_states[player][piece_index].active.space;
-                next_space = @intCast(@Vector(2, u2), @as(@Vector(2, i3), next_space) + @as(@Vector(2, i3), travel_amount));
-                next_game_state.piece_states[player][piece_index].active.space = next_space;
+                const previous_space = next_game_state.piece_states[player][piece_index].active.space;
+                next_game_state.piece_states[player][piece_index].active.moveBy(travel_amount);
+
+                // TODO: kill opponent pieces!
+
+                for (next_game_state.piece_states[other_player]) |*other_piece| {
+                    if (other_piece.active.period == next_game_state.piece_states[player][piece_index].active.period) {
+                        // TODO: NOW! Do the killing!
+                        _ = previous_space;
+                    }
+                }
             },
         }
 
@@ -352,7 +365,7 @@ fn makeGoodMove(game_state: *GameState) void {
     }
 
     // TODO: pick a good focus!
-    const new_focus : Period = switch (focus) {
+    const new_focus: Period = switch (focus) {
         .past => .present,
         .present => .future,
         .future => .past,
