@@ -24,7 +24,7 @@ const PiecePosition = struct {
 
     pub fn equals(a: PiecePosition, b: PiecePosition) bool {
         if (a.period == b.period) {
-            if (a.space == b.space) {
+            if (a.space[0] == b.space[0] and a.space[1] == b.space[1] ) {
                 return true;
             }
         }
@@ -231,7 +231,7 @@ const GameState = struct {
             .time_travel => |time_travel_action| switch (time_travel_action) {
                 .forward => {
                     // TODO: Assert we can travel here!
-                    next_game_state.piece_states[player][piece_index].period = piece_state.period.forward();
+                    next_game_state.piece_states[player][piece_index].active.period = piece_state.active.period.forward();
                 },
                 .back => {
                     // TODO: assert that we can travel to this space!
@@ -243,7 +243,7 @@ const GameState = struct {
 
                             // travel back in time
                             next_game_state.piece_states[player][piece_index] = .{
-                                .active = .{ .period = game_state.piece_states[player][piece_index].period.back(), .space = game_state.piece_states[player][piece_index].space },
+                                .active = .{ .period = game_state.piece_states[player][piece_index].active.period.back(), .space = game_state.piece_states[player][piece_index].active.space },
                             };
 
                             success = true;
@@ -256,9 +256,13 @@ const GameState = struct {
             },
             .space_travel => |travel_amount| {
                 // TODO: assert that we can travel to this space?
-                next_game_state.piece_states[player][piece_index].active.space += travel_amount;
+                var next_space = next_game_state.piece_states[player][piece_index].active.space;
+                next_space = @intCast(@Vector(2, u2), @as(@Vector(2, i3), next_space) + @as(@Vector(2, i3), travel_amount));
+                next_game_state.piece_states[player][piece_index].active.space = next_space;
             },
         }
+
+        return next_game_state;
     }
 
     fn canDoSingleAction(game_state: GameState) bool {
@@ -278,18 +282,18 @@ const GameState = struct {
             }
 
             // TODO:Next this all appears to be nonsense? Implement this properly.
-            if (piece_state.period == focus) {
-                if (piece_state.space[0] < board_size - 1) {
+            if (piece_state.active.period == focus) {
+                if (piece_state.active.space[0] < board_size - 1) {
                     // can't move into space occupied by ourselves!
-                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.period, .space = piece_state.space + PieceSpace{ 1, 0 } }, player)) {
+                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.active.period, .space = piece_state.active.space + PieceSpace{ 1, 0 } }, player)) {
                         // can move back and forth - so cam defo do a full move
                         return true;
                     }
                 }
 
                 // can travel back to past!
-                if (piece_state.period != .past and reserve_count > 0) {
-                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.period.back(), .space = piece_state.space }, player)) {
+                if (piece_state.active.period != .past and reserve_count > 0) {
+                    if (!game_state.isOccupiedByPlayer(.{ .period = piece_state.active.period.back(), .space = piece_state.active.space }, player)) {
                         // TODO: check further moves!
                     }
                 }
